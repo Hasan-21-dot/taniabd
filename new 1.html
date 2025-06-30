@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Binary Trade Money Management</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background-color: #f0f8ff;
+    }
+    .section-title {
+      text-align: center;
+      background: #ffcc99;
+      padding: 10px;
+      font-size: 24px;
+      font-weight: bold;
+    }
+    .table-wrapper {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      max-width: 900px;
+      margin: 20px auto;
+      background: #fff;
+      box-shadow: 0 0 10px #ccc;
+      border-collapse: collapse;
+      min-width: 600px;
+    }
+    th, td {
+      border: 1px solid #aaa;
+      padding: 25px;
+      text-align: center;
+    }
+    th {
+      background: #4CAF50;
+      color: white;
+    }
+    input, select {
+      width: 100%;
+      padding: 5px;
+      text-align: center;
+    }
+    .final-results {
+      background: #d9edf7;
+    }
+    .controls {
+      text-align: center;
+      margin: 20px 0;
+    }
+    .btn {
+      background: #4CAF50;
+      color: white;
+      padding: 8px 20px;
+      border: none;
+      cursor: pointer;
+      margin: 5px;
+    }
+  </style>
+</head>
+<body>
+<div class="section-title">Binary Trade Money Management</div>
+<div class="controls">
+  📅 Date: <input id="filterDate" type="date"/>
+  <button class="btn" onclick="loadDataByDate()">Show</button>
+  <button class="btn" onclick="saveData()">📄 Save</button>
+  <button class="btn" onclick="calculateResults()">🔄 Refresh</button>
+  <button class="btn" onclick="exportToPDF()">Export to PDF</button>
+  <button class="btn" onclick="deleteDataByDate()">🗑️ Delete</button>
+</div>
+<div class="table-wrapper">
+  <table>
+    <thead><tr><th>Trade no</th><th>Invest</th><th>W/L</th><th>Result</th></tr></thead>
+    <tbody id="tradeTableBody"></tbody>
+    <tfoot><tr><th colspan="3">Total</th><th id="totalResult">0.00</th></tr></tfoot>
+  </table>
+</div>
+
+<div class="table-wrapper">
+  <table>
+    <tbody>
+      <tr class="final-results"><td>Capital</td><td><input id="capital" type="number"/></td></tr>
+      <tr class="final-results"><td>Total Profit</td><td id="totalProfit">0.00</td></tr>
+      <tr class="final-results"><td>Total Balance</td><td id="totalBalance">0.00</td></tr>
+      <tr class="final-results"><td>Currency%</td><td><input id="currency" type="number" value="85"/></td></tr>
+      <tr class="final-results"><td>Target Profit</td><td><input id="targetProfit" type="number" value="600"/></td></tr>
+      <tr class="final-results"><td colspan="2" id="mtpStatus">M.T.P is Not Fillup</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBQNkp7FHh8dYLzqDJIPt0WJmsDGokOlJI",
+  authDomain: "tamim-85bb4.firebaseapp.com",
+  databaseURL: "https://tamim-85bb4-default-rtdb.firebaseio.com",
+  projectId: "tamim-85bb4",
+  storageBucket: "tamim-85bb4.firebasestorage.app",
+  messagingSenderId: "395832782894",
+  appId: "1:395832782894:web:bc7440e792e969119aafbf",
+  measurementId: "G-238EFC9YK6"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const trades = 15;
+
+function buildTable() {
+  const tb = document.getElementById('tradeTableBody');
+  tb.innerHTML = '';
+  for (let i = 0; i < trades; i++) {
+    tb.innerHTML += `<tr>
+      <td>${i + 1}</td>
+      <td><input type="number" id="invest${i}"></td>
+      <td><select id="wl${i}"><option>W</option><option>L</option></select></td>
+      <td><input type="number" id="result${i}" readonly></td>
+    </tr>`;
+  }
+}
+
+function getKey() {
+  return document.getElementById('filterDate').value;
+}
+
+function saveData() {
+  const key = getKey();
+  if (!key) return alert('Select a date!');
+  const rows = [];
+  for (let i = 0; i < trades; i++) {
+    rows.push({
+      invest: document.getElementById(`invest${i}`).value || '0',
+      wl: document.getElementById(`wl${i}`).value,
+      result: document.getElementById(`result${i}`).value || '0'
+    });
+  }
+  db.ref('trades/' + key).set({
+    trades: rows,
+    capital: document.getElementById('capital').value || '0',
+    currency: document.getElementById('currency').value || '85',
+    targetProfit: document.getElementById('targetProfit').value || '600'
+  });
+  alert('✅ Saved for ' + key);
+}
+
+function calculateResults() {
+  let tot = 0, cur = parseFloat(document.getElementById('currency').value) || 0;
+  for (let i = 0; i < trades; i++) {
+    const inv = parseFloat(document.getElementById(`invest${i}`).value) || 0;
+    const wl = document.getElementById(`wl${i}`).value;
+    const res = wl === 'W' ? inv * cur / 100 : -inv;
+    document.getElementById(`result${i}`).value = res.toFixed(2);
+    tot += res;
+  }
+  document.getElementById('totalResult').innerText = tot.toFixed(2);
+  document.getElementById('totalProfit').innerText = tot.toFixed(2);
+  const cap = parseFloat(document.getElementById('capital').value) || 0;
+  const bal = cap + tot;
+  document.getElementById('totalBalance').innerText = bal.toFixed(2);
+  document.getElementById('mtpStatus').innerText = tot >= parseFloat(document.getElementById('targetProfit').value || 0)
+    ? '✅ M.T.P is Fillup' : '❌ M.T.P is Not Fillup';
+  document.body.style.backgroundColor = bal > cap ? '#e0ffe0' : bal < cap ? '#ffe0e0' : '#f0f8ff';
+}
+
+async function loadDataByDate() {
+  const key = getKey();
+  if (!key) return alert('Select a date!');
+  buildTable();
+  const snap = await db.ref('trades/' + key).once('value');
+  const data = snap.val();
+  if (data) {
+    data.trades.forEach((t, i) => {
+      document.getElementById(`invest${i}`).value = t.invest;
+      document.getElementById(`wl${i}`).value = t.wl;
+      document.getElementById(`result${i}`).value = t.result;
+    });
+    document.getElementById('capital').value = data.capital;
+    document.getElementById('currency').value = data.currency;
+    document.getElementById('targetProfit').value = data.targetProfit;
+  } else {
+    const allSnap = await db.ref('trades').once('value');
+    const all = allSnap.val() || {};
+    const prev = Object.keys(all).filter(k => k < key).sort().pop();
+    if (prev && all[prev]) {
+      const pd = all[prev];
+      const totalPrev = pd.trades.reduce((sum, t) => sum + parseFloat(t.result || 0), 0);
+      document.getElementById('capital').value = (parseFloat(pd.capital || 0) + totalPrev).toFixed(2);
+      document.getElementById('currency').value = pd.currency || '85';
+      document.getElementById('targetProfit').value = pd.targetProfit || '600';
+      alert('❌ কোন তথ্য পাওয়া যায়নি। নতুন দিন শুরু হচ্ছে আগের দিনের Balance দিয়ে।');
+    } else {
+      alert('❌ কোন তথ্য পাওয়া যায়নি।');
+    }
+  }
+  calculateResults();
+}
+
+async function deleteDataByDate() {
+  const key = getKey();
+  if (!key) return alert('Select a date!');
+  if (confirm('Delete ' + key + ' data?')) {
+    await db.ref('trades/' + key).remove();
+    alert('🗑️ Deleted ' + key);
+    buildTable();
+  }
+}
+
+function exportToPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const key = getKey();
+  doc.text(`Report - ${key}`, 10, 10);
+  const body = [];
+  for (let i = 0; i < trades; i++) {
+    body.push([
+      i + 1,
+      document.getElementById(`invest${i}`).value || '0',
+      document.getElementById(`wl${i}`).value,
+      document.getElementById(`result${i}`).value || '0'
+    ]);
+  }
+  doc.autoTable({ startY: 20, head: [['#', 'Invest', 'W/L', 'Result']], body });
+  let y = doc.lastAutoTable.finalY + 10;
+  const extra = [
+    ['Capital', document.getElementById('capital').value],
+    ['Total Profit', document.getElementById('totalProfit').innerText],
+    ['Total Balance', document.getElementById('totalBalance').innerText],
+    ['Currency%', document.getElementById('currency').value],
+    ['Target Profit', document.getElementById('targetProfit').value],
+    ['MTP Status', document.getElementById('mtpStatus').innerText]
+  ];
+  extra.forEach((row, i) => {
+    doc.text(`${row[0]}: ${row[1]}`, 10, y + i * 10);
+  });
+  doc.save(`Report_${key}.pdf`);
+}
+
+
+window.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('filterDate').value = new Date().toISOString().split('T')[0];
+  await loadDataByDate();
+});
+</script>
+</body>
+</html>
